@@ -7,6 +7,7 @@
     <h1>Microsoft Identity Python Web App</h1>
     <h2>Powered by MSAL Python {{ version }}</h2>
     Welcome {{ user.get("name") }}!
+    <P>Access Token: {{ access_token }}</P>
     <li><a href='/graphcall'>Call Microsoft Graph API</a></li>
     <li><a href="/logout">Logout</a></li>
 </body>

@@ -2,6 +2,8 @@ import uuid
 import requests
 from flask import Flask, render_template, session, request, redirect, url_for
 from flask_session import Session  # https://pythonhosted.org/Flask-Session
+from flask_api import status
+from flask import request
 import msal
 import app_config
 
@@ -15,7 +17,7 @@ Session(app)
 def index():
     if not session.get("user"):
         return redirect(url_for("login"))
-    return render_template('index.html', user=session["user"], version=msal.__version__)
+    return render_template('index.html', user=session["user"], access_token=session["access_token"], version=msal.__version__)
 
 @app.route("/login")
 def login():
@@ -30,6 +32,7 @@ def login():
 @app.route("/getAToken")  # Its absolute URL must match your app's redirect_uri set in AAD
 def authorized():
     if request.args['state'] != session.get("state"):
+        print("{}:{}",request.args['state'],session.get("state"))
         return redirect(url_for("login"))
     cache = _load_cache()
     result = _build_msal_app(cache).acquire_token_by_authorization_code(
@@ -40,6 +43,7 @@ def authorized():
         return "Login failure: %s, %s" % (
             result["error"], result.get("error_description"))
     session["user"] = result.get("id_token_claims")
+    session["access_token"] = result.get("access_token")
     _save_cache(cache)
     return redirect(url_for("index"))
 
@@ -61,6 +65,21 @@ def graphcall():
         ).json()
     return render_template('display.html', result=graph_data)
 
+@app.route('/api/graphcall')
+def graphcallapi():
+    authstring = request.headers.get('Authorization')
+    if authstring == None:
+        content = {'please move along': 'nothing to see here'}
+        return content, status.HTTP_403_FORBIDDEN
+    else:
+        # Assume 'Bearer <token>'
+        access_token = authstring[7:]
+        
+    graph_data = requests.get(  # Use token to call downstream service
+        app_config.ENDPOINT,
+        headers={'Authorization': 'Bearer ' + access_token},
+        ).json()
+    return graph_data
 
 def _load_cache():
     cache = msal.SerializableTokenCache()
