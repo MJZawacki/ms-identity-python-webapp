@@ -23,7 +23,7 @@ def index():
 def login():
     session["state"] = str(uuid.uuid4())
     auth_url = _build_msal_app().get_authorization_request_url(
-        app_config.SCOPE,  # Technically we can use empty list [] to just sign in,
+        [],  #app_config.SCOPE,  # Technically we can use empty list [] to just sign in,
                            # here we choose to also collect end user consent upfront
         state=session["state"],
         redirect_uri=url_for("authorized", _external=True))
@@ -56,14 +56,14 @@ def logout():
 
 @app.route("/graphcall")
 def graphcall():
-    token = _get_token_from_cache(app_config.SCOPE)
+    token = _get_token_from_cache(app_config.GRAPH_SCOPE)
     if not token:
         return redirect(url_for("login"))
     graph_data = requests.get(  # Use token to call downstream service
         app_config.ENDPOINT,
         headers={'Authorization': 'Bearer ' + token['access_token']},
         ).json()
-    return render_template('display.html', result=graph_data)
+    return render_template('display.html', result=graph_data, mytoken=session["access_token"], graphtoken=token)
 
 @app.route('/api/graphcall')
 def graphcallapi():
@@ -74,10 +74,13 @@ def graphcallapi():
     else:
         # Assume 'Bearer <token>'
         access_token = authstring[7:]
-        
+    
+    # Get Scope for Graph from current JWT Token
+    cache = _load_cache()
+    result = _build_msal_app(cache).acquire_token_on_behalf_of(access_token, app_config.GRAPH_SCOPE)
     graph_data = requests.get(  # Use token to call downstream service
         app_config.ENDPOINT,
-        headers={'Authorization': 'Bearer ' + access_token},
+        headers={'Authorization': 'Bearer ' + result['access_token']},
         ).json()
     return graph_data
 
